@@ -174,26 +174,6 @@ This pipeline use below softwares for each step
 •	Purpose
 -	To calculate KO-level TPM values for each sample.
 -	To integrate MAG abundance with KO annotation for comparative analysis.
-TPM distribution decision criteria.
-Approach	CDS length–based TPM distribution	MAG abundance–based KO TPM distribution
-Assumption	Reads mapped to contigs are proportionally distributed across CDSs according to CDS length.	KO-level TPM can be partitioned among MAGs according to their relative abundance of that KO.
-Workflow (simplified)	1.	Use coverm contig --methods tpm to calculate contig-level TPM.
-2.	Extract CDS–KO mapping from DIAMOND output.
-3.	Redistribute contig TPM to CDSs based on relative CDS length within each contig.
-4.	Sum CDS TPMs per KO, then per MAG.	5.	Use coverm contig --methods tpm to calculate contig-level TPM.
-6.	Map contigs to KOs (DIAMOND) and to MAGs (binning file).
-7.	Aggregate TPM at KO level across the community.
-8.	Redistribute KO TPM to MAGs proportionally to their KO copy/abundance ratio.
-9.	Output MAG × KO TPM matrix.
-Strengths	•	Captures CDS/gene-level resolution.
-•	More biologically realistic for gene expression analysis.
-•	Useful for differential expression of individual genes.	•	Direct and stable for MAG-level functional profiles.
-•	Avoids length bias problems.
-•	Suitable for heatmaps, PCA, pathway enrichment, and community-level comparisons.
-Weaknesses	•	Assumption may be inaccurate (reads not evenly distributed).
-•	Short CDS may be biased.
-•	More computational steps and uncertainty.	•	Loses CDS/gene-level resolution.
-•	MAG-level distribution may mask intra-MAG variation.
-•	Sensitive to KO copy number bias.
+
 
  
