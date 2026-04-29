@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+#  load the module
+source /apps/profiles/modules_asax.sh.dyn
+module load anaconda/3-2024.10
+
+FASTPOUT="/home/your/path/1_fastp_out"
+FASTQC_RESULT="/home/your/path/fastqc_results"
+
+mkdir -p "$FASTQC_RESULT"
+
+fastqc "$FASTPOUT"/*.fastq.gz \
+       -t 10 \
+       -o "$FASTQC_RESULT"
+
+multiqc "$FASTQC_RESULT" -o "$FASTQC_RESULT"
