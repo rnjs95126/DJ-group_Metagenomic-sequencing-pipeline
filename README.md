@@ -23,3 +23,177 @@ This pipeline use below softwares for each step
   6. MAG quality check: Dastool, dRep, CheckM
   7. Taxonomic: GTDB-TK
   8. Annotation: DIAMOND, EnrichM, KEGG Database
+
+
+•	Quality check (Fastqc)
+•	Check quality of reads and trim adapters and too short reads
+
+•	Quality Control & Host DNA Removal (Fastp)
+•	Software: Fastp
+•	Input: Paired-end FASTQ files (*_R1.fastq, *_R2.fastq)
+•	Output: Quality-trimmed, host-decontaminated FASTQ files (*_R1_kneaddata.trimmed.1.fastq, *_R1_kneaddata.trimmed.2.fastq)
+•	Processing
+-	Uses Trimmomatic to remove low-quality reads and adapters.
+-	Uses Bowtie2 to map reads to the host genome and remove contaminating reads.
+-	Intermediate files are removed with the --remove-intermediate-output option.
+•	Purpose
+-	To improve assembly quality by removing low-quality reads and host DNA contamination.
+
+•	Combine Reads
+•	Software: Bash script (combineallfile.sh)
+•	Input: Cleaned FASTQ files from each sample
+•	Output: all_R1.fastq, all_R2.fastq
+•	Processing
+-	Concatenates cleaned reads from all samples using cat.
+•	Purpose
+-	To combine all reads to maximize assembly coverage and improve binning resolution.
+
+•	Assembly
+•	Software: MEGAHIT
+•	Input: Combined reads
+•	Output: final.contigs.fa
+•	Processing:
+-	Uses a De Bruijn graph-based algorithm for metagenomic assembly.
+-	The --min-contig-len 1000 option ensures contigs are at least 1,000 bp long.
+•	Purpose:
+-	To reconstruct metagenomic contigs from sequencing data.
+
+•	Build Bowtie2 Index
+•	Software: Bowtie2
+•	Input: final.contigs.fa
+•	Output: Bowtie2 index files
+•	Processing:
+-	Builds an index of assembled contigs for efficient read mapping.
+•	Purpose:
+-	To prepare for mapping reads to the assembly.
+
+•	Mapping Reads to Assembly
+•	Software: Bowtie2 + SAMtools
+•	Input: Bowtie2 index + cleaned FASTQ files
+•	Output: Sorted BAM files (*.sorted.bam) and BAM index files (*.bam.bai)
+•	Processing:
+-	Bowtie2 maps reads to contigs, outputs SAM format.
+-	SAMtools converts to BAM, sorts, and creates BAM index files.
+•	Purpose:
+-	To calculate coverage and generate data for binning analyses.
+
+•	Calculate Coverage
+•	Software: CoverM
+•	Input: Sorted BAM files
+•	Output: coverm_depth.tsv
+•	Processing:
+-	Computes average contig coverage per sample.
+-	Uses stringent cutoffs (≥95% identity, ≥75% aligned length).
+•	Purpose:
+-	To generate a coverage table for binning and MAG abundance analysis.
+
+•	Binning
+•	Software: VAMB
+•	Input: final.contigs.fa and VAMB-compatible abundance table
+•	Output: VAMB binning results
+•	Processing: 
+-	Uses a variational autoencoder and clustering approach.
+•	Purpose:
+-	Deep learning-based MAG clustering.
+
+•	Software: SemiBin2
+•	Feature Generation
+-	Inputs: contigs FASTA + sorted BAM files
+-	Outputs: feature matrix
+•	Model Training
+-	Inputs: feature matrix
+-	Output: trained model
+•	Binning
+-	Uses trained model to cluster contigs into bins.
+•	Purpose
+-	Semi-supervised deep learning MAG clustering.
+
+•	Software: CONCOCT
+•	Split Contigs
+-	Uses cut_up_fasta.py to split contigs into 10kb fragments.
+•	Coverage Table
+-	Uses concoct_coverage_table.py to calculate coverage per fragment.
+•	Binning
+-	Uses Gaussian mixture model clustering.
+•	Purpose
+-	To bin contigs using both coverage and composition data.
+
+•	Bin Refinement
+•	Software: DAS Tool
+•	Input: TSV binning outputs from VAMB, SemiBin2, CONCOCT + contigs FASTA
+•	Output: Refined bin FASTA files
+•	Processing
+-	Integrates multiple binning results.
+-	Scores bins, selects high-quality MAGs.
+-	Outputs FASTA files and bin quality reports.
+•	Purpose
+-	To select the best MAGs from all binning results.
+
+•	Dereplication
+•	Software: dRep
+•	Input: Refined bin FASTA files
+•	Output: Dereplicated MAGs
+•	Processing
+-	Uses CheckM to filter bins (≥70% completeness, ≤5% contamination).
+-	Clusters bins using ANI ≥95% (ANImf algorithm).
+-	Selects representative MAGs from each cluster.
+•	Purpose
+-	To remove redundancy and select the highest-quality MAGs.
+
+•	Functional Annotation
+•	Software: EnrichM
+•	Input: Dereplicated MAGs
+•	Output: KEGG Ortholog annotations
+•	Processing
+-	Uses the KEGG database to assign functional annotations to MAGs.
+•	Purpose
+-	To predict the metabolic potential of MAGs.
+
+•	Taxonomic Classification
+•	Software: GTDB-Tk
+•	Input: Dereplicated MAGs
+•	Output: Taxonomy assignments
+•	Processing
+-	Uses the GTDB reference database to assign taxonomic ranks.
+•	Purpose
+-	To classify MAGs taxonomically at species or genus level.
+
+•	KO TPM Calculation
+•	Software: Custom Python script (Pandas)
+•	Input
+-	DIAMOND_search.tsv (KO annotations)
+-	coverm_depth.tsv (coverage table)
+-	KO reference files (ko_list.txt, ko_to_pathway.txt, pathway_list.txt)
+•	Output
+-	Sample-specific KO TPM results (sample_ko_tpm_with_description.csv and .tsv)
+•	Processing
+-	Extracts KO annotations per contig.
+-	Merges coverage data, calculates RPK, then normalizes to TPM.
+-	Joins KO descriptions and pathways.
+-	Handles multiple pathways per KO by concatenating them with semicolons.
+•	Purpose
+-	To calculate KO-level TPM values for each sample.
+-	To integrate MAG abundance with KO annotation for comparative analysis.
+TPM distribution decision criteria.
+Approach	CDS length–based TPM distribution	MAG abundance–based KO TPM distribution
+Assumption	Reads mapped to contigs are proportionally distributed across CDSs according to CDS length.	KO-level TPM can be partitioned among MAGs according to their relative abundance of that KO.
+Workflow (simplified)	1.	Use coverm contig --methods tpm to calculate contig-level TPM.
+2.	Extract CDS–KO mapping from DIAMOND output.
+3.	Redistribute contig TPM to CDSs based on relative CDS length within each contig.
+4.	Sum CDS TPMs per KO, then per MAG.	5.	Use coverm contig --methods tpm to calculate contig-level TPM.
+6.	Map contigs to KOs (DIAMOND) and to MAGs (binning file).
+7.	Aggregate TPM at KO level across the community.
+8.	Redistribute KO TPM to MAGs proportionally to their KO copy/abundance ratio.
+9.	Output MAG × KO TPM matrix.
+Strengths	•	Captures CDS/gene-level resolution.
+•	More biologically realistic for gene expression analysis.
+•	Useful for differential expression of individual genes.	•	Direct and stable for MAG-level functional profiles.
+•	Avoids length bias problems.
+•	Suitable for heatmaps, PCA, pathway enrichment, and community-level comparisons.
+Weaknesses	•	Assumption may be inaccurate (reads not evenly distributed).
+•	Short CDS may be biased.
+•	More computational steps and uncertainty.	•	Loses CDS/gene-level resolution.
+•	MAG-level distribution may mask intra-MAG variation.
+•	Sensitive to KO copy number bias.
+
+ 
